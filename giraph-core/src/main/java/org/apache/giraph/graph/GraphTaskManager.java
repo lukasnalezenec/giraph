@@ -64,7 +64,9 @@ import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
@@ -104,6 +106,8 @@ public class GraphTaskManager<I extends WritableComparable, V extends Writable,
   private static final Time TIME = SystemTime.get();
   /** Class logger */
   private static final Logger LOG = Logger.getLogger(GraphTaskManager.class);
+
+  private static final String VALIDATE_PARTITIONING_CONSISTENCY = "giraph.validatePartitioningConsistency";
   /** Coordination service worker */
   private CentralizedServiceWorker<I, V, E> serviceWorker;
   /** Coordination service master */
@@ -697,6 +701,13 @@ public class GraphTaskManager<I extends WritableComparable, V extends Writable,
           serviceWorker.getPartitionStore().getOrCreatePartition(
               partitionId).getVertexCount();
     }
+
+    validatePartitioning(
+            messageStore,
+            serviceWorker.getPartitionOwners(),
+            serviceWorker.getPartitionStore().getPartitionIds());
+
+
     WorkerProgress.get().startSuperstep(
         serviceWorker.getSuperstep(),
         verticesToCompute,
@@ -727,6 +738,36 @@ public class GraphTaskManager<I extends WritableComparable, V extends Writable,
     }
 
     computeAllTimerContext.stop();
+  }
+
+  private void validatePartitioning(
+          final MessageStore<I, Writable> messageStore,
+          final Iterable<? extends PartitionOwner> allPartitions,
+          final Iterable<Integer> myPartitions) {
+    if (getConf().getBoolean(VALIDATE_PARTITIONING_CONSISTENCY, false)) {
+
+    final Set<Integer> allPartitionsIds = new HashSet<Integer>();
+    for (int id: myPartitions) {
+      allPartitionsIds.add(id);
+    }
+
+      for (PartitionOwner partition: allPartitions) {
+        int partitionId = partition.getPartitionId();
+        Iterable<I> messages =
+                messageStore.getPartitionDestinationVertices(
+                        partitionId);
+
+        final boolean messagesExist = messages.iterator().hasNext();
+        final boolean myPartition = allPartitionsIds.contains(partitionId);
+
+        if (messagesExist != myPartition) {
+          String msg = "Partitioning is inconsistent: I have received messages " +
+                  "for partition " + partitionId +" from another worker";
+          LOG.fatal(msg);
+          throw new RuntimeException(msg);
+        }
+      }
+    }
   }
 
   /**

@@ -64,8 +64,25 @@ public abstract class SimpleWorkerPartitioner<I extends WritableComparable,
   public PartitionExchange updatePartitionOwners(WorkerInfo myWorkerInfo,
       Collection<? extends PartitionOwner> masterSetPartitionOwners,
       PartitionStore<I, V, E> partitionStore) {
-    return PartitionBalancer.updatePartitionOwners(partitionOwnerList,
-        myWorkerInfo, masterSetPartitionOwners, partitionStore);
+
+    PartitionExchange partitionExchange =
+            PartitionBalancer.updatePartitionOwners(partitionOwnerList,
+            myWorkerInfo, masterSetPartitionOwners, partitionStore);
+
+    checkConsistency(partitionOwnerList);
+
+    return partitionExchange;
+  }
+
+  private void checkConsistency(List<PartitionOwner> partitionOwners) {
+
+    for (int i = 0; i < partitionOwners.size(); i++) {
+      if (partitionOwners.get(i).getPartitionId() != i) {
+        String msg = "Inconsistent partitioning at index " + i +
+                " : " + partitionOwners;
+        throw new RuntimeException(msg);
+      }
+    }
   }
 
   @Override

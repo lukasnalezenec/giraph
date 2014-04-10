@@ -123,6 +123,22 @@ public class PartitionBalancer {
     }
   }
 
+  /** Sorts PartitionOwners by id*/
+  private static class PartitionOwnerIdComparator
+          implements Comparator<PartitionOwner> {
+
+    @Override
+    public int compare(PartitionOwner owner1, PartitionOwner owner2) {
+      if (owner1 == owner2) {
+        return 0;
+      } else if (owner1 != null && owner2 != null) {
+        return owner1.getPartitionId() - owner2.getPartitionId();
+      } else {
+        return (owner1 == null) ? -1: 1;
+      }
+    }
+  }
+
   /**
    * Structure to keep track of how much value a {@link WorkerInfo} has
    * been assigned.
@@ -297,6 +313,8 @@ public class PartitionBalancer {
       minQueue.add(chosenWorker);
     }
 
+    sortPartitionOwners(partitionOwnerList);
+
     return partitionOwnerList;
   }
 
@@ -319,6 +337,9 @@ public class PartitionBalancer {
       PartitionStore partitionStore) {
     partitionOwnerList.clear();
     partitionOwnerList.addAll(masterSetPartitionOwners);
+
+    //masterSetPartitionOwners is not guaranteed to be sorted
+    sortPartitionOwners(partitionOwnerList);
 
     Set<WorkerInfo> dependentWorkerSet = new HashSet<WorkerInfo>();
     Map<WorkerInfo, List<Integer>> workerPartitionOwnerMap =
@@ -355,5 +376,10 @@ public class PartitionBalancer {
     return new PartitionExchange(dependentWorkerSet,
         workerPartitionOwnerMap);
   }
+
+  public static void sortPartitionOwners(List<PartitionOwner> owners) {
+    Collections.sort(owners, new PartitionOwnerIdComparator());
+  }
+
 }
 
