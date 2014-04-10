@@ -153,6 +153,8 @@ public class NettyClient {
   private final int maxRequestMilliseconds;
   /** Waiting internal for checking outstanding requests msecs */
   private final int waitingRequestMsecs;
+  /** Wait time when connection failed*/
+  private int sleepDelay = 100;
   /** Timed logger for printing request debugging */
   private final TimedLogger requestLogger = new TimedLogger(15 * 1000, LOG);
   /** Worker executor group */
@@ -403,6 +405,7 @@ public class NettyClient {
     // Wait for all the connections to succeed up to n tries
     int failures = 0;
     int connected = 0;
+    sleepDelay = 100;
     while (failures < maxConnectionFailures) {
       List<ChannelFutureAddress> nextCheckFutures = Lists.newArrayList();
       for (ChannelFutureAddress waitingConnection : waitingConnectionList) {
@@ -453,6 +456,16 @@ public class NettyClient {
           failures + " failures total.");
       if (nextCheckFutures.isEmpty()) {
         break;
+      } else {
+        try {
+          LOG.info("Waiting " + sleepDelay +
+                  " ms for " + nextCheckFutures.size() + " connections");
+          Thread.sleep(sleepDelay);
+          int delay = (int) Math.round(sleepDelay * 1.2);
+          sleepDelay = Math.max(1000, delay);
+        } catch (InterruptedException e) {
+          LOG.warn("Waiting failed:" + e);
+        }
       }
       waitingConnectionList = nextCheckFutures;
     }
